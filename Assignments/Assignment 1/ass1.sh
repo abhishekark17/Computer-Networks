@@ -1,2 +1,6 @@
 #!/usr/bin/bash
-ping google.com
+traceroute -I $1 > temp.txt
+cat temp.txt | while read line || [[ -n $line ]];
+do
+   echo $line
+done
