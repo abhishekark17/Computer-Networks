@@ -87,6 +87,9 @@ class Client:
                 elif ack == f"ERROR 102 Unable to send\n \n":
                     print(ack.split("\n")[0])
                     break
+                elif ack == f"ERROR 104 Recipient Side Failure\n \n":
+                    print(ack.split("\n")[0])
+                    break
                 elif ack == f"ERROR 103 Header Incomplete\n \n":
                     print(ack.split("\n")[0])
                     self.isClosed = True

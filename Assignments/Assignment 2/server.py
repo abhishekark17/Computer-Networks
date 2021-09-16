@@ -58,6 +58,9 @@ class Server:
                 if(self.notWellFormed(username)):
                     client.send(f"ERROR 100 Malformed username\n \n".encode())
                     return
+                elif username in self.recv_clients:
+                    client.send("ERROR 106 User Already Exists\n \n".encode())
+                    return
                 self.recv_clients[username] = client
                 self.username[client] = username
                 client.send(f"REGISTERED TORECV {username}\n \n".encode())
@@ -67,6 +70,9 @@ class Server:
                 if(self.notWellFormed(username)):
                     client.send(f"ERROR 100 Malformed username\n \n".encode())
                     return
+                elif username in self.send_clients:
+                    client.send("ERROR 106 User Already Exists\n \n".encode())
+                    return
                 self.send_clients[username] = client
                 self.username[client] = username
                 client.send(f"REGISTERED TOSEND {username}\n \n".encode())
@@ -74,7 +80,11 @@ class Server:
 
     def handle_message(self, client):
         while True:
+            if self.username[client] == None:
+                break
             message = client.recv(1024).decode()
+            if self.username[client] == None:
+                break
             if self.right_format(message):
                 try:
                     recipient = message.split("\n")[0].split(" ")[1]
@@ -87,19 +97,26 @@ class Server:
                 recipient_sockets = []  # For broadcasting purpose
                 if recipient == "all":
                     for key, value in self.recv_clients.items():
-                        if self.send_clients[self.username[value]] != client:
+                        if self.send_clients[self.username[value]] != client and self.send_clients[self.username[value]]!=None:
                             recipient_sockets.append(value)
+                
                 else:
                     try:
-                        recipient_sockets.append(self.recv_clients[recipient])
+                        if self.recv_clients[recipient]!=None:
+                            recipient_sockets.append(self.recv_clients[recipient])
+                        else:
+                            client.send(f"ERROR 102 Unable to send\n \n".encode())
+                            continue
                     except:
                         # If user is not in the list send this error
                         client.send(f"ERROR 102 Unable to send\n \n".encode())
                         continue
+                if len(recipient_sockets)==0:
+                    continue
+                success = True
                 for recipient_socket in recipient_sockets:
-                    success = True
                     recipient_socket.send(
-                        f"FORWARD {self.username[client]}\nContent-length: {len(messageOriginal)}\n \n{messageOriginal}".encode())
+                        f"FORWARD {self.username[client]}\nContent-length: {len(recipient_sockets)}\n \n{messageOriginal}".encode())
                     while True:
                         recipient_ack = recipient_socket.recv(1024).decode()
                         # print(recipient_ack)
@@ -109,17 +126,19 @@ class Server:
                         elif recipient_ack == f"ERROR 103 Header Incomplete\n \n":
                             success = False
                             # print(recipient_ack.split("\n")[0])
-                            client.send(recipient_ack.encode())
-                            usr = self.username[client]
+                            client.send("ERROR 104 Recipient Side Failure\n \n".encode()) # Close recipient side
+                            usr = self.username[recipient_socket]
                             recv_client = self.recv_clients[usr]
                             send_client = self.send_clients[usr]
-                            del self.recv_clients[usr]
-                            del self.send_clients[usr]
-                            del self.username[recv_client]
-                            del self.username[send_client]
-                            send_client.close()
-                            recv_client.close()
+                            self.recv_clients[usr] = None
+                            self.send_clients[usr] = None
+                            self.username[recv_client] = None
+                            self.username[send_client] = None
+                            # send_client.close()
+                            # recv_client.close()
                             break
+                    if success==False:
+                        break
                 if success:  # If message is sent to all clients
                     if len(recipient_sockets) > 1:
                         client.send(f"SEND all\n \n".encode())
@@ -130,17 +149,18 @@ class Server:
             else:  # message send by sender is not of the right format then send the error and remove the connection
                 error_message = f"ERROR 103 Header Incomplete\n \n"
                 # print("Error 103 Sent")
-                client.send(error_message.encode())
+                client.send(error_message.encode()) # Close client side
                 usr = self.username[client]
                 recv_client = self.recv_clients[usr]
                 send_client = self.send_clients[usr]
-                del self.recv_clients[usr]
-                del self.send_clients[usr]
-                del self.username[recv_client]
-                del self.username[send_client]
-                send_client.close()
-                recv_client.close()
-                break
+                self.recv_clients[usr] = None
+                self.send_clients[usr] = None
+                self.username[recv_client] = None
+                self.username[send_client] = None
+                # send_client.close()
+                # recv_client.close()
+                sys.exit()
+                return
 
 
 if __name__ == "__main__":
