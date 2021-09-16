@@ -1,6 +1,7 @@
 import socket
 import threading
 import argparse
+import sys
 
 
 class Client:
@@ -10,6 +11,7 @@ class Client:
         self.HOST = SERVER  # server host name
         self.PORT = PORT  # server port number
         self.UserName = UserName  # user name
+        self.isClosed = False
 
     def connect(self):
         while True:
@@ -25,12 +27,14 @@ class Client:
         self.socketOUT.send(f"REGISTER TOSEND {self.UserName}\n \n".encode())
         while True:
             AckOUT = self.socketOUT.recv(1024).decode()
+            print(AckOUT.split("\n")[0])
             if(AckOUT == f"REGISTERED TOSEND {self.UserName}\n \n"):
                 self.socketIN.send(
                     f"REGISTER TORECV {self.UserName}\n \n".encode())
                 while True:
                     AckIN = self.socketIN.recv(1024).decode()
                     if AckIN == f"REGISTERED TORECV {self.UserName}\n \n":
+                        print(AckIN.split("\n")[0])
                         print(f"{self.UserName} is successfully registered")
                         break
                     elif AckIN == f"ERROR 100 Malformed username\n \n":
@@ -50,58 +54,74 @@ class Client:
         recv_handler.start()
 
     def right_format(self, message):
-        # message = message.split("\n")
-        # if len(message) != 4:
-        # 	return False
-        # else:
-        # 	if len(message[0]) != 2 or message[0].split(" ")[0] != "SEND":
-        # 		return False
-        # 	else:
-        # 		if len(message[1] != 2) or message[1].split(" ")[0] != "Content-length:":
-        # 			return False
-        # 		elif len(messsage[2]) != 0:
-        # 			return False
+        message = message.split("\n")
+        # print(message)
+        if len(message) != 4:
+            return False
+        else:
+            if len(message[0].split(" ")) != 2 or message[0].split(" ")[0] != "FORWARD":
+                return False
+            else:
+                if len(message[1].split(" ")) != 2 or message[1].split(" ")[0] != "Content-length:":
+                    return False
+                # elif len(message[2].split(" ")) != 0:
+                #     return False
+                elif int(message[1].split(" ")[1]) != len(message[3]):
+                    return False
         return True
 
     def send_Handler(self):
         while True:
             message = input()
-            recipient = message.split(" ")[0][1:]
+            recipient = message.split(" ")[0][1:-1]
             messageOriginal = " ".join(message.split(" ")[1:])
-            if self.right_format(message):
-                self.socketOUT.send(
-                    f"SEND {recipient}\nContent-length: {len(messageOriginal)}\n \n{messageOriginal}".encode())
-                while True:
-                    ack = self.socketOUT.recv(1024).decode()
-                    if ack == f"SEND {recipient}\n \n":
-                        print(f"Message Delivered successfully to {recipient}")
-                        break
-                    elif ack == f"ERROR 102 Unable to send\n \n":
-                        print("ERROR 102 Unable To Send")
-                        break
-                    elif ack == f"ERROR 103 Header incomplete\n \n":
-                        print("ERROR 103 Header incomplete")
-                        break
-            else:
-                print("Wrong message format. Send again with right message format...")
+            messageFinal = f"SEND {recipient}\nContent-length: {1}\n \n{messageOriginal}"
+            self.socketOUT.send(
+                messageFinal.encode())
+            while True:
+                ack = self.socketOUT.recv(1024).decode()
+                # print(ack.split("\n")[0])
+                if ack == f"SEND {recipient}\n \n":
+                    print(f"Message Delivered successfully to {recipient}")
+                    break
+                elif ack == f"ERROR 102 Unable to send\n \n":
+                    print(ack.split("\n")[0])
+                    break
+                elif ack == f"ERROR 103 Header Incomplete\n \n":
+                    print(ack.split("\n")[0])
+                    self.isClosed = True
+                    sys.exit()
+                    return
 
     def recv_Handler(self):
-        while True:
+        while not self.isClosed:
             message = self.socketIN.recv(1024).decode()
-            try:
-                sender = message.split("\n")[0].split(" ")[1]
-                messageOriginal = message.split("\n")[3]
-                self.socketIN.send(f"RECEIVED {sender}\n \n".encode())
-            except:
-                self.socketIN.send(f"ERROR 103 Header incomplete\n \n")
-                continue
-            print(f"{sender}: {messageOriginal}")
+            if(self.right_format(message)):
+                try:
+                    sender = message.split("\n")[0].split(" ")[1]
+                    messageOriginal = message.split("\n")[3]
+                    self.socketIN.send(f"RECEIVED {sender}\n \n".encode())
+                    # print("Sent Receive Ack")
+                except:
+                    self.socketIN.send(
+                        f"ERROR 103 Header Incomplete\n \n".encode())
+                    # print("Message Not Forwaded Properly")
+
+                    continue
+                print(f"@{sender}: {messageOriginal}")
+            else:
+                if not self.isClosed:
+                    self.socketIN.send(
+                        f"ERROR 103 Header Incomplete\n \n".encode())
+                    continue
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--Server", help="Provide the name of the server",required=True)
-    parser.add_argument("--username",type=str, help="Provide the UserName",required=True)
+    parser.add_argument(
+        "--Server", help="Provide the name of the server", required=True)
+    parser.add_argument("--username", type=str,
+                        help="Provide the UserName", required=True)
     parser.add_argument("--Port", default=1234, type=int,
                         help="Provide the Port number of the server")
     opt = parser.parse_args()
