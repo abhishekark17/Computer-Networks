@@ -58,8 +58,8 @@ class Server:
                 if(self.notWellFormed(username)):
                     client.send(f"ERROR 100 Malformed username\n \n".encode())
                     return
-                elif username in self.recv_clients:
-                    client.send("ERROR 106 User Already Exists\n \n".encode())
+                elif username in self.recv_clients and self.recv_clients[username]!=None:
+                    client.send("ERROR 105 User Already Exists\n \n".encode())
                     return
                 self.recv_clients[username] = client
                 self.username[client] = username
@@ -70,8 +70,8 @@ class Server:
                 if(self.notWellFormed(username)):
                     client.send(f"ERROR 100 Malformed username\n \n".encode())
                     return
-                elif username in self.send_clients:
-                    client.send("ERROR 106 User Already Exists\n \n".encode())
+                elif username in self.send_clients and self.send_clients[username]!=None:
+                    client.send("ERROR 105 User Already Exists\n \n".encode())
                     return
                 self.send_clients[username] = client
                 self.username[client] = username
@@ -97,7 +97,7 @@ class Server:
                 recipient_sockets = []  # For broadcasting purpose
                 if recipient == "all":
                     for key, value in self.recv_clients.items():
-                        if self.send_clients[self.username[value]] != client and self.send_clients[self.username[value]]!=None:
+                        if value is not None and self.send_clients[self.username[value]] != client:
                             recipient_sockets.append(value)
                 
                 else:
@@ -116,7 +116,7 @@ class Server:
                 success = True
                 for recipient_socket in recipient_sockets:
                     recipient_socket.send(
-                        f"FORWARD {self.username[client]}\nContent-length: {len(recipient_sockets)}\n \n{messageOriginal}".encode())
+                        f"FORWARD {self.username[client]}\nContent-length: {len(messageOriginal)}\n \n{messageOriginal}".encode())
                     while True:
                         recipient_ack = recipient_socket.recv(1024).decode()
                         # print(recipient_ack)
@@ -167,7 +167,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--n", type=int, default=10,
                         help="Maximum Number of clients")
-    parser.add_argument("--port", help="Port number")
+    parser.add_argument("--port",type=int,default=1234, help="Port number")
     opt = parser.parse_args()
     Max_clients = int(opt.n)
     PORT = int(opt.port)
