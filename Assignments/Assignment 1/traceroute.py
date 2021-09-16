@@ -25,14 +25,14 @@ while True:
     # if website is reached break from the loop
     if lines[1].split(" ")[-1] == "ms\n":
         ipOfIntermediateServer = lines[1].split(" ")[4][1:-2]
-        print(ipOfIntermediateServer)
+        # print(ipOfIntermediateServer)
 
     # In case router/switch does not respond
     if(lines[1] == "\n"):
         ttl += 1
         ip.append("No Reply")
         rtt.append(float(0))
-        print("No reply")
+        print(ttl,"\tNo reply\t",0.0)
         fileToRead.close()
         continue
     
@@ -42,7 +42,6 @@ while True:
         if(ord(ipOfIntermediateServer[0])<49 or ord(ipOfIntermediateServer[0])>58):
             ipOfIntermediateServer = lines[1].split(" ")[2][1:-1]
     
-    print(ipOfIntermediateServer)
     ip.append(ipOfIntermediateServer)
 
     # To find the rtt of the router where the packet was lost
@@ -59,21 +58,26 @@ while True:
     
     Pinged.close()
     fileToRead.close()
+    print(f'{ttl}\t{ipOfIntermediateServer}\t{rtt[-1]}')
     ttl += 1
 
     # if the website is reached break the loop
     if(ipOfHost[1:-1] == ipOfIntermediateServer or lines[1].split(" ")[-1]=="ms\n"):
         break
 
-print(ip)
-print(rtt)
+# print(ip)
+# print(rtt)
 ttlList = [i for i in range(1,len(ip)+1)]
 # plt.plot(ttlList,rtt,'bo',label=)
 
 
 fig, ax = plt.subplots()
+plt.xlim(0,len(ip)+1)
+        
 ax.scatter(ttlList, rtt)
-
+fig.suptitle('RTT vs Hop Number')
+ax.set_ylabel('RTT (msec)')
+ax.set_xlabel('Hop Number')
 for i, txt in enumerate(ip):
     ax.annotate(str(i+1), (ttlList[i], rtt[i]))
 
